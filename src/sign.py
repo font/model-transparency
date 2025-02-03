@@ -33,6 +33,9 @@ from model_signing.signing import sigstore
 
 log = logging.getLogger(__name__)
 
+def _sigstore_method(args: argparse.Namespace):
+    log.info("Using sigstore method")
+
 
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser("Script to sign models")
@@ -51,11 +54,13 @@ def _arguments() -> argparse.Namespace:
         default=pathlib.Path("./model.sig"),
         dest="sig_out",
     )
+    parser.set_defaults(method="sigstore")
+    parser.set_defaults(func=_sigstore_method)
 
     method_cmd = parser.add_subparsers(
-        required=True,
+        required=False,
         dest="method",
-        help="method to sign the model: [pki, private-key, sigstore, skip]",
+        help="method to sign the model: [pki, private-key, sigstore (default), skip]",
     )
     # PKI
     pki = method_cmd.add_parser("pki")
@@ -110,6 +115,7 @@ def _arguments() -> argparse.Namespace:
 
 
 def _get_payload_signer(args: argparse.Namespace) -> signing.Signer:
+    import pdb; pdb.set_trace()
     if args.method == "private-key":
         _check_private_key_options(args)
         payload_signer = key.ECKeySigner.from_path(
@@ -122,7 +128,8 @@ def _get_payload_signer(args: argparse.Namespace) -> signing.Signer:
             args.key_path, args.signing_cert_path, args.cert_chain_path
         )
         return in_toto_signature.IntotoSigner(payload_signer)
-    elif args.method == "sigstore":
+    elif args.method == "sigstore" or args.method == None:
+        args.use_ambient_credentials = True
         return sigstore.SigstoreDSSESigner(
             use_ambient_credentials=args.use_ambient_credentials
         )
@@ -131,7 +138,7 @@ def _get_payload_signer(args: argparse.Namespace) -> signing.Signer:
     else:
         log.error(f"unsupported signing method {args.method}")
         log.error(
-            'supported methods: ["pki", "private-key", "sigstore", "skip"]'
+            'supported methods: ["pki", "private-key", "sigstore" (default), "skip"]'
         )
         exit(-1)
 
